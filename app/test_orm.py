@@ -1,6 +1,7 @@
 # test_orm.py
 from app.core.database import SessionLocal
 from app.models.user import User
+from app.core.config import TEST_PASSWORD_HASH
 
 db = SessionLocal()
 
@@ -20,12 +21,11 @@ print(
     user.id,
     user.username
 )
-
 # 创建
 print("=======创建用户========")
 user = User(
     username="张三",
-    password_hash="qazwsxedc"
+    password_hash=TEST_PASSWORD_HASH
 )
 db.add(user)
 db.commit()
