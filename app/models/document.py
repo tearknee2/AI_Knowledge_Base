@@ -9,12 +9,10 @@ from sqlalchemy import (
     BigInteger,
     Enum
     )
-
 from sqlalchemy.orm import relationship
-
 from sqlalchemy.sql import func
-
 from app.core.database import Base
+
 
 class Document(Base):
 

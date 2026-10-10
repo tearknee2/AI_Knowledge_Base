@@ -13,6 +13,11 @@ class KnowledgeBase(Base):
         back_populates="knowledge_bases"
     )
 
+    conversations = relationship(
+        "Conversation",
+        back_populates="knowledge_base"
+    )
+
     documents = relationship(
         "Document",
         back_populates="knowledge_base"

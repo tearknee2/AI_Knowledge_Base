@@ -14,6 +14,10 @@ class User(Base):
         back_populates="user"
     )
 
+    conversations = relationship(
+        "Conversation",
+        back_populates="user"
+    )
     id = Column(
         Integer,
         primary_key=True,
