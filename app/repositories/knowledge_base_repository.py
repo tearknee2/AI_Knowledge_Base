@@ -30,3 +30,13 @@ class KnowledgeBaseRepository:
         self.db.commit()
         self.db.refresh(data)
         return data
+
+    def get_by_name_and_user(self, user_id, name):
+        """业务查询支持"""
+        result = self.db.query(KnowledgeBase).filter(
+            KnowledgeBase.user_id == user_id,
+            KnowledgeBase.name == name
+        ).first()
+        # if result:
+        #     return result
+        return result
