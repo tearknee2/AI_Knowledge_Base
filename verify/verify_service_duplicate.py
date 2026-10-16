@@ -32,3 +32,6 @@ try:
     print(result2.name)
 except Exception as e:
     print(e)
+
+finally:
+    db.close()
