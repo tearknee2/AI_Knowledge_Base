@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class UserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
     username: str = Field(min_length=3, max_length=30)
     password: str = Field(min_length=8)

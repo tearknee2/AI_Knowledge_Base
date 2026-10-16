@@ -42,6 +42,7 @@ response = UserResponse(
 print("\n测试4：用户响应")
 print(response,type(response))
 print(response.model_dump())
+print("响应字段:",response.model_dump().keys())
 
 class FakeUser:
     def __init__(self):
@@ -58,3 +59,17 @@ response_from_object = UserResponse.model_validate(fake_user)
 print("\n测试5：从对象转换响应Schema")
 print(response_from_object)
 print(response_from_object.model_dump())
+
+
+# 测试6：额外传入user_id数据
+try:
+    user = UserCreate(
+    username="alice",
+    password="password123",
+    user_id=1
+    )
+except ValidationError as e:
+    print("测试6通过：额外字段被拒绝")
+    print(e)
+else:
+    print("测试6失败：额外字段没有被拒绝")
