@@ -12,9 +12,8 @@ service = KnowledgeBaseService(repository)
 result = service.create_knowledge_base(
     {
         "user_id": 1,
-        "name": "service_test",
-        "description": "test service",
-        "status": "ACTIVE"
+        "name": "service_test_1016",
+        "description": "test service"
     }
 )
 print(result.id)

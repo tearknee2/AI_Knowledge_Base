@@ -24,4 +24,6 @@ class KnowledgeBaseService:
             raise BusinessException(
                 "知识库名称已存在"
             )
+        knowledge_base_data['status'] = "ACTIVE"
+
         return self.repository.create(knowledge_base_data)
