@@ -3,9 +3,10 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.schemas.knowledge_base import(
+from app.schemas.knowledge_base import (
     KnowledgeBaseCreate,
-    KnowledgeBaseResponse
+    KnowledgeBaseResponse,
+    KnowledgeListItem
 )
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.services.knowledge_base_service import (
@@ -23,7 +24,12 @@ async def get():
 @app.post(
     "/knowledge-bases",
     response_model=KnowledgeBaseResponse,
-    status_code=201
+    status_code=201,
+    responses={
+        409:{
+            "description":"知识库名称已经存在",
+        },
+    },
 )
 def create_knowledge_base(
     data: KnowledgeBaseCreate,
@@ -41,3 +47,19 @@ def create_knowledge_base(
             status_code=409,
             detail=str(exc)
         ) from exc
+
+@app.get(
+    # "/knowledgebases/{user_id}/documents",
+    "/knowledgebases",
+    response_model=list[KnowledgeListItem],
+    status_code=200
+)
+def list_knowledge_bases(
+    db: Session = Depends(get_db)
+):
+    repository = KnowledgeBaseRepository(db)
+
+    service = KnowledgeBaseService(repository)
+
+    return service.get_knowledge_bases_by_user(user_id=1)
+

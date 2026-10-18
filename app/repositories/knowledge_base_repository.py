@@ -40,3 +40,12 @@ class KnowledgeBaseRepository:
         # if result:
         #     return result
         return result
+
+    def get_by_user(self, user_id: int):
+        """查询指定用户创建的所有知识库"""
+        result = self.db.query(KnowledgeBase).filter(
+            KnowledgeBase.user_id == user_id
+        ).all()
+        # .all()返回的是一个列表
+
+        return result

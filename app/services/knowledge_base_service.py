@@ -27,3 +27,7 @@ class KnowledgeBaseService:
         knowledge_base_data['status'] = "ACTIVE"
 
         return self.repository.create(knowledge_base_data)
+
+    def get_knowledge_bases_by_user(self, user_id: int):
+        """查询指定用户的知识库列表"""
+        return self.repository.get_by_user(user_id)
