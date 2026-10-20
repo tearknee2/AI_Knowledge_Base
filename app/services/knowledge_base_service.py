@@ -31,3 +31,13 @@ class KnowledgeBaseService:
     def get_knowledge_bases_by_user(self, user_id: int):
         """查询指定用户的知识库列表"""
         return self.repository.get_by_user(user_id)
+
+
+    def get_knowledge_base_by_id(self, knowledge_base_id: int, user_id: int):
+        """根据知识库ID查询对应的知识库记录"""
+        result = self.repository.get_by_id(knowledge_base_id)
+        if result is None:
+            raise BusinessException("知识库不存在")
+        if user_id != result.user_id:
+            raise BusinessException("没有权限访问该知识库")
+        return result
