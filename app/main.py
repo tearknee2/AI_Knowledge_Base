@@ -1,16 +1,23 @@
 # main.py
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+
+from app.schemas.document import DocumentResponse
 from app.schemas.knowledge_base import (
     KnowledgeBaseCreate,
     KnowledgeBaseResponse,
     KnowledgeListItem
 )
 from app.schemas.user import UserCreate, UserResponse
+
 from app.repositories.user_repository import UserRepository
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
+from app.repositories.document_repository import DocumentRepository
+
+from app.services.document_service import DocumentService
+
 from app.services.knowledge_base_service import (
     KnowledgeBaseService,
     BusinessException
@@ -102,6 +109,11 @@ def get_knowledge_base_by_id(
     "/users",
     response_model=UserResponse,
     status_code=201,
+    responses={
+        409:{
+            "description":"用户名重复"
+        }
+    }
 )
 def create_user(
     user_data: UserCreate,
@@ -119,3 +131,27 @@ def create_user(
             detail=str(exc)
         ) from exc
     return result
+
+
+@app.post(
+    "/knowledge-bases/{knowledge_base_id}/documents",
+    response_model=DocumentResponse,
+    status_code=201,
+)
+def upload_document(
+        knowledge_base_id: int,
+        db: Session = Depends(get_db),
+        file : UploadFile = File(...)
+):
+    knowledge_base_repository = KnowledgeBaseRepository(db)
+    knowledge_base_service = KnowledgeBaseService(knowledge_base_repository)
+    document_repository = DocumentRepository(db)
+    document_service = DocumentService(document_repository,knowledge_base_service)
+    try:
+        result = document_service.upload_document(knowledge_base_id, file)
+        return result
+    except BusinessException as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc)
+        ) from exc
