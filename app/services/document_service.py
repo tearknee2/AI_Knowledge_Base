@@ -47,3 +47,16 @@ class DocumentService:
         except Exception:
             Path(save_path).unlink(missing_ok=True)
             raise
+
+    def list_documents(self, knowledge_base_id: int, user_id: int):
+        # 1.校验知识库是否存在，以及用户是否有权访问
+        self.knowledge_base_service.get_knowledge_base_by_id(
+            knowledge_base_id,
+            user_id
+        )
+
+        # 2.查询该知识库下的所有文档
+        result = self.repository.get_by_knowledge_base_id(knowledge_base_id)
+
+        # 3.返回文档列表
+        return result

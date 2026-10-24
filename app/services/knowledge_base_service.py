@@ -9,8 +9,7 @@ class KnowledgeBaseService:
 
     def create_knowledge_base(self, knowledge_base_data: dict):
         """
-        接收知识库数据，
-        调用Respository创建知识库，
+        接收知识库数据，调用Respository创建知识库，
         :return: 返回创建好的知识库对象
         """
         user_id = knowledge_base_data['user_id']

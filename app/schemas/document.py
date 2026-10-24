@@ -33,3 +33,23 @@ class DocumentResponse(BaseModel):
         "FAILED"
     ]
     created_at : datetime
+
+class DocumentListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id : int
+    knowledge_base_id : int
+    file_name : str = Field(max_length=255)
+    file_type : str = Field(max_length=20)
+    file_size : int
+    status : Literal[
+        "PENDING",
+        "PARSING",
+        "CHUNKING",
+        "EMBEDDING",
+        "COMPLETED",
+        "FAILED"
+    ]
+    error_message : str | None
+    created_at : datetime
+    updated_at : datetime

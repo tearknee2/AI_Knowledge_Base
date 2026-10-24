@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 
-from app.schemas.document import DocumentResponse
+from app.schemas.document import (
+    DocumentResponse,
+    DocumentListItem
+)
+
 from app.schemas.knowledge_base import (
     KnowledgeBaseCreate,
     KnowledgeBaseResponse,
@@ -155,3 +159,53 @@ def upload_document(
             status_code=404,
             detail=str(exc)
         ) from exc
+
+@app.get(
+    "/knowledge-bases/{knowledge_base_id}/documents",
+    response_model=list[DocumentListItem],
+    status_code=200,
+    responses={
+        404:{
+            "description": "知识库不存在或者无权访问"
+        }
+    }
+)
+def list_documents(
+    knowledge_base_id: int,
+    db: Session = Depends(get_db)
+):
+    knowledge_base_repository = KnowledgeBaseRepository(db)
+    knowledge_base_service = KnowledgeBaseService(knowledge_base_repository)
+
+    document_repository = DocumentRepository(db)
+    document_service = DocumentService(
+        document_repository,
+        knowledge_base_service
+    )
+    try:
+        result = document_service.list_documents(
+            knowledge_base_id,
+            user_id=1,
+        )
+        return result
+    except BusinessException as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc)
+        ) from exc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
