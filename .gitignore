@@ -3,6 +3,5 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-docs
 uploads
 chroma_practice_db
