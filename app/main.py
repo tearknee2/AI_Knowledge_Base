@@ -19,6 +19,7 @@ from app.schemas.user import UserCreate, UserResponse
 from app.repositories.user_repository import UserRepository
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.repositories.document_repository import DocumentRepository
+from app.services.document_processing_service import DocumentProcessingService
 
 from app.services.document_service import DocumentService
 
@@ -150,7 +151,12 @@ def upload_document(
     knowledge_base_repository = KnowledgeBaseRepository(db)
     knowledge_base_service = KnowledgeBaseService(knowledge_base_repository)
     document_repository = DocumentRepository(db)
-    document_service = DocumentService(document_repository,knowledge_base_service)
+    document_processing_service = DocumentProcessingService(document_repository)
+    document_service = DocumentService(
+        document_repository,
+        knowledge_base_service,
+        document_processing_service
+    )
     try:
         result = document_service.upload_document(knowledge_base_id, file)
         return result
@@ -178,9 +184,12 @@ def list_documents(
     knowledge_base_service = KnowledgeBaseService(knowledge_base_repository)
 
     document_repository = DocumentRepository(db)
+    document_processing_service = DocumentProcessingService(document_repository)
+
     document_service = DocumentService(
         document_repository,
-        knowledge_base_service
+        knowledge_base_service,
+        document_processing_service
     )
     try:
         result = document_service.list_documents(

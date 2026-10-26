@@ -6,13 +6,20 @@ from pathlib import Path
 from fastapi import UploadFile
 from app.services.knowledge_base_service import KnowledgeBaseService
 from app.repositories.document_repository import DocumentRepository
+from app.services.document_processing_service import DocumentProcessingService
 
 
 
 class DocumentService:
-    def __init__(self, repository: DocumentRepository, knowledge_base_service: KnowledgeBaseService):
+    def __init__(
+        self,
+        repository: DocumentRepository,
+        knowledge_base_service: KnowledgeBaseService,
+        document_processing_service: DocumentProcessingService
+):
         self.repository = repository
         self.knowledge_base_service = knowledge_base_service
+        self.document_processing_service = document_processing_service
 
     def upload_document(self, knowledge_base_id: int, file: UploadFile):
         self.knowledge_base_service.get_knowledge_base_by_id(knowledge_base_id, user_id=1)
@@ -43,10 +50,12 @@ class DocumentService:
 
         try:
             result = self.repository.create(document_data)
-            return result
         except Exception:
             Path(save_path).unlink(missing_ok=True)
             raise
+        self.document_processing_service.store_document_vectors(result.id)
+
+        return result
 
     def list_documents(self, knowledge_base_id: int, user_id: int):
         # 1.校验知识库是否存在，以及用户是否有权访问

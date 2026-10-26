@@ -1,5 +1,12 @@
 # 把"写入向量数据库"封装成独立能力
 import chromadb
+from dotenv import load_dotenv
+import os
+
+load_dotenv(
+    dotenv_path=r"D:\PythonProject\ai_agent\AI_Knowledge_Base\.env"
+)
+CHROMA_PATH = os.getenv("CHROMA_PATH")
 
 _client = None
 _collection = None
@@ -8,7 +15,7 @@ def init():
     global _client, _collection
     if _collection is None:
         _client = chromadb.PersistentClient(
-            path="./chroma_test_db"
+            path=str(CHROMA_PATH)
         )
         _collection = _client.get_or_create_collection(
             name="knowledge_chunks_bge_test"

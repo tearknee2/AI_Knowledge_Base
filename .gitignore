@@ -5,3 +5,4 @@ __pycache__/
 venv/
 uploads
 chroma_practice_db
+verify/chroma_test_db/

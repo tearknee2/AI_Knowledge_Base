@@ -12,6 +12,7 @@ class DocumentProcessingService:
         self.repository = repository
 
     def query_document(self, document_id: int):
+        # 负责查询文档
         result =self.repository.get_by_id(document_id)
 
         if result is None:
@@ -19,33 +20,43 @@ class DocumentProcessingService:
 
         return result
 
-    def load_and_split_document(self, document_id: int):
-        # 数据库查询
-        query_result = self.query_document(document_id)
-        # 文件读取清洗
-        load_clean_result = load_txt(query_result.file_path)
+    def load_and_split_document(self, document):
+        # 负责加载和切分
+        # 文件读取和清洗
+        load_clean_result = load_txt(document.file_path)
         # 文本分块
         split_result = split_text(load_clean_result, 500, 50)
-
+        # 返回文本块
         return split_result
 
-    def vectorize_document(self, document_id: int):
-        chunks = self.load_and_split_document(document_id)
+    def vectorize_document(self, chunks):
+        """得到文本块并生成向量"""
         vectors = embed_texts(chunks)
         return vectors
 
     def store_document_vectors(self, document_id: int):
+        # 负责组织完整流程、写入向量、校验版本及更新状态
         # 1.查询文档
         document = self.query_document(document_id)
-        self.repository.update_status(
-            document_id,
-            "PARSING"
-        )
+
         try:
+
+            self.repository.update_status(
+                document_id,
+                "PARSING"
+            )
             # 2.读取文档并切分
-            chunks = self.load_and_split_document(document_id)
+            self.repository.update_status(
+                document_id,
+                "CHUNKING"
+            )
+            chunks = self.load_and_split_document(document)
             # 3.生成新向量
-            embeddings = embed_texts(chunks)
+            self.repository.update_status(
+                document_id,
+                "EMBEDDING"
+            )
+            embeddings = self.vectorize_document(chunks)
 
             # 3.为本次处理生成唯一版本号
             version = uuid4().hex
@@ -114,6 +125,10 @@ class DocumentProcessingService:
                 "COMPLETED"
             )
         except Exception as exc:
-            self.repository.update_status(document_id, "FAILED", str(exc))
+            try:
+                self.repository.update_status(document_id, "FAILED", str(exc))
+            except Exception:
+                pass
             raise
+
         return len(chunks)
