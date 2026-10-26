@@ -41,6 +41,6 @@ for item in result:
     assert len(item) <= 10
 for i in range(len(result)-1):
     assert result[i][-2:] == result[i+1][:2]
-
+assert text == text.strip()
 
 test_file.unlink()

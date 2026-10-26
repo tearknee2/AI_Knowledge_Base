@@ -1,4 +1,6 @@
 from pathlib import Path
+from app.rag.text_cleaner import clean_text
+
 def load_txt(file_path: str) ->str:
     """
     :param file_path:上传文件的实际保存路径
@@ -14,4 +16,5 @@ def load_txt(file_path: str) ->str:
         raise ValueError("文件类型有误")
 
     # 3.读取文件正文并返回
-    return p.read_text(encoding="utf-8")
+    text = p.read_text(encoding="utf-8")
+    return clean_text(text)
