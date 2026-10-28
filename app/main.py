@@ -8,21 +8,20 @@ from app.schemas.document import (
     DocumentResponse,
     DocumentListItem
 )
-
 from app.schemas.knowledge_base import (
     KnowledgeBaseCreate,
     KnowledgeBaseResponse,
     KnowledgeListItem
 )
 from app.schemas.user import UserCreate, UserResponse
+from app.schemas.chat import ChatRequest, ChatResponse
 
 from app.repositories.user_repository import UserRepository
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.repositories.document_repository import DocumentRepository
+
 from app.services.document_processing_service import DocumentProcessingService
-
 from app.services.document_service import DocumentService
-
 from app.services.knowledge_base_service import (
     KnowledgeBaseService,
     BusinessException
@@ -31,6 +30,8 @@ from app.services.user_service import (
     UserService,
     BusinessException as UserBusinessException
 )
+from app.services.rag_service import answer_question
+
 
 app = FastAPI()
 
@@ -204,8 +205,46 @@ def list_documents(
         ) from exc
 
 
+@app.post(
+    "/knowledge-bases/{knowledge_base_id}/chat",
+    response_model=ChatResponse,
+    status_code=200,
+    responses={
+        404:{
+            "description":"知识库不存在或者无权访问"
+        }
+    }
+)
+async def chat_with_knowledge_base(
+    knowledge_base_id: int,
+    request: ChatRequest,
+    db: Session = Depends(get_db)
+):
+    # 1.检查知识库是否存在，以及当前临时用户是否有权访问
+    repository = KnowledgeBaseRepository(db)
+    service = KnowledgeBaseService(repository)
+    try:
+        service.get_knowledge_base_by_id(knowledge_base_id, user_id=1)
+    except BusinessException as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc)
+        ) from exc
 
+    # 2.执行完整的RAG回答
+    result = await answer_question(
+        question=request.question,
+        knowledge_base_id=knowledge_base_id,
+        n_results=4
+    )
 
+    # 3.组织符合ChatResponse的响应数据
+    return ChatResponse(
+        conversation_id=request.conversation_id,
+        question=request.question,
+        answer=result["answer"],
+        sources=result["sources"]
+    )
 
 
 

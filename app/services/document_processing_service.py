@@ -40,7 +40,6 @@ class DocumentProcessingService:
         document = self.query_document(document_id)
 
         try:
-
             self.repository.update_status(
                 document_id,
                 "PARSING"

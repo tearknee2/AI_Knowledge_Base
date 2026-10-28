@@ -12,6 +12,7 @@ _client = None
 _collection = None
 
 def init():
+    """初始化Chroma持久化客户端和Collection"""
     global _client, _collection
     if _collection is None:
         _client = chromadb.PersistentClient(
@@ -28,6 +29,8 @@ def upsert_chunks(
     metadatas: list[dict],
     embeddings: list[list[float]]
 ):
+    """写入或更新文本块、元数据和向量"""
+
     # 创建持久化客户端
     client, collection = init()
     collection.upsert(
@@ -54,3 +57,19 @@ def delete_document_chunks(
             ]
         }
     collection.delete(where=where)
+
+def search_chunks(query_embedding:list[float], knowledge_base_id: int, n_results: int):
+    """接收用户问题转换得到的查询向量，返回文本块、来源元数据和相似度距离"""
+
+    client, collection = init()
+    query_result = collection.query(
+        # collection.query() 接收的是二维向量列表，所以单条查询向量需要包装成列表。
+        query_embeddings=[query_embedding],
+        n_results=n_results,
+        where={"knowledge_base_id":knowledge_base_id},
+        include=["documents", "metadatas", "distances"]
+    )
+    # 输出包含多个字段的字典dict
+    return query_result
+
+
