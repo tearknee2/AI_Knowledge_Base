@@ -1,4 +1,5 @@
 # main.py
+import logging
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
@@ -34,7 +35,10 @@ from app.services.user_service import (
 )
 from app.services.rag_service import answer_question
 from app.services.conversation_service import ConversationService
+from app.services.llm_service import LLMServiceError
 
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -254,11 +258,24 @@ async def chat_with_knowledge_base(
     )
 
     # 2.执行完整的RAG回答
-    result = await answer_question(
-        question=request.question,
-        knowledge_base_id=knowledge_base_id,
-        n_results=4
-    )
+    try:
+        result = await answer_question(
+            question=request.question,
+            knowledge_base_id=knowledge_base_id,
+            n_results=4
+        )
+    except LLMServiceError as exc:
+        logger.exception("知识库聊天的大模型调用失败")
+        raise HTTPException(
+            status_code=502,
+            detail="大模型服务暂时无法正常处理请求"
+        ) from exc
+    except Exception as exc:
+        logger.exception("知识库聊天处理失败")
+        raise HTTPException(
+            status_code=500,
+            detail="知识库问答失败"
+        ) from exc
 
     message_repository.create(
         conversation_id=conversation.id,
