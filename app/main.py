@@ -19,6 +19,8 @@ from app.schemas.chat import ChatRequest, ChatResponse
 from app.repositories.user_repository import UserRepository
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.repositories.document_repository import DocumentRepository
+from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.message_repository import MessageRepository
 
 from app.services.document_processing_service import DocumentProcessingService
 from app.services.document_service import DocumentService
@@ -31,6 +33,7 @@ from app.services.user_service import (
     BusinessException as UserBusinessException
 )
 from app.services.rag_service import answer_question
+from app.services.conversation_service import ConversationService
 
 
 app = FastAPI()
@@ -223,13 +226,32 @@ async def chat_with_knowledge_base(
     # 1.检查知识库是否存在，以及当前临时用户是否有权访问
     repository = KnowledgeBaseRepository(db)
     service = KnowledgeBaseService(repository)
+
+    conversation_repository = ConversationRepository(db)
+    conversation_service = ConversationService(
+        conversation_repository,
+        knowledge_base_service=service,
+    )
+
+    message_repository = MessageRepository(db)
     try:
-        service.get_knowledge_base_by_id(knowledge_base_id, user_id=1)
+        conversation = conversation_service.get_or_create_conversation(
+            knowledge_base_id=knowledge_base_id,
+            title=request.question,
+            conversation_id=request.conversation_id,
+            user_id=1
+        )
     except BusinessException as exc:
         raise HTTPException(
             status_code=404,
             detail=str(exc)
         ) from exc
+
+    message_repository.create(
+        conversation_id=conversation.id,
+        role="user",
+        content=request.question
+    )
 
     # 2.执行完整的RAG回答
     result = await answer_question(
@@ -238,9 +260,15 @@ async def chat_with_knowledge_base(
         n_results=4
     )
 
+    message_repository.create(
+        conversation_id=conversation.id,
+        role="assistant",
+        content=result["answer"],
+    )
+
     # 3.组织符合ChatResponse的响应数据
     return ChatResponse(
-        conversation_id=request.conversation_id,
+        conversation_id=conversation.id,
         question=request.question,
         answer=result["answer"],
         sources=result["sources"]
