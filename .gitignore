@@ -11,3 +11,6 @@ verify/chroma_test_db/
 
 # 个人学习教程和自动生成文档
 docs/tutorial/
+
+app/rag/chroma_practice_db/
+.pytest_cache/
