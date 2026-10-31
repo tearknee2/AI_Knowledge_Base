@@ -61,3 +61,12 @@ class DocumentRepository:
             raise
 
         return document
+
+    def get_completed_document_ids(self, knowledge_base_id: int) -> list[int] :
+        """返回指定知识库中处理成功的文档 ID 列表"""
+        ids = self.db.query(Document.id).filter(
+            Document.knowledge_base_id == knowledge_base_id,
+            Document.status == "COMPLETED",
+        ).all()
+
+        return [row[0] for row in ids]

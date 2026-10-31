@@ -6,3 +6,8 @@ venv/
 uploads
 chroma_practice_db
 verify/chroma_test_db/
+# IDE / AI 工具生成文件
+.workbuddy-ai/
+
+# 个人学习教程和自动生成文档
+docs/tutorial/

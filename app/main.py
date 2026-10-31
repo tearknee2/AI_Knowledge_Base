@@ -238,6 +238,8 @@ async def chat_with_knowledge_base(
     )
 
     message_repository = MessageRepository(db)
+
+    document_repository = DocumentRepository(db)
     try:
         conversation = conversation_service.get_or_create_conversation(
             knowledge_base_id=knowledge_base_id,
@@ -257,12 +259,15 @@ async def chat_with_knowledge_base(
         content=request.question
     )
 
+    n_results = 4
+
     # 2.执行完整的RAG回答
     try:
         result = await answer_question(
             question=request.question,
             knowledge_base_id=knowledge_base_id,
-            n_results=4
+            document_repository=document_repository,
+            n_results=n_results,
         )
     except LLMServiceError as exc:
         logger.exception("知识库聊天的大模型调用失败")

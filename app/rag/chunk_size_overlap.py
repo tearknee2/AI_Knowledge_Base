@@ -12,8 +12,8 @@ def split_text(text, chunk_size:int, chunk_overlap:int):
         raise ValueError("给出的参数不合法")
     if not text:
         return result
-    if chunk_size > len(text):
-        return [text]
+    if len(text) <= chunk_size:
+        return [text] if text else []
 
     for i in range(0, len(text), chunk_size-chunk_overlap):
         result.append(text[i:i+chunk_size])

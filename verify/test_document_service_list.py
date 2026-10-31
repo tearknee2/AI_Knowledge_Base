@@ -29,7 +29,7 @@ def test_list_documents_success():
         documents=[{"id":1},{"id":2}]
     )
 
-    document_service = DocumentService(fake_document_repository,fake_knowledge_base_service)
+    document_service = DocumentService(fake_document_repository,fake_knowledge_base_service,None)
 
     knowledge_base_id = 1
     user_id = 1
@@ -46,7 +46,7 @@ def test_list_documents_empty():
         documents=[]
     )
 
-    document_service = DocumentService(fake_document_repository,fake_knowledge_base_service)
+    document_service = DocumentService(fake_document_repository,fake_knowledge_base_service,None)
 
     knowledge_base_id = 1
     user_id = 1
@@ -62,7 +62,7 @@ def test_list_documents_permission_denied():
         documents=[{"id":1},{"id":2}]
     )
 
-    document_service = DocumentService(fake_document_repository,fake_knowledge_base_service)
+    document_service = DocumentService(fake_document_repository,fake_knowledge_base_service,None)
 
     knowledge_base_id = 1
     user_id = 1
@@ -75,7 +75,3 @@ def test_list_documents_permission_denied():
         assert fake_document_repository.called is False
 
     assert exception_raised is True
-
-test_list_documents_success()
-test_list_documents_empty()
-test_list_documents_permission_denied()

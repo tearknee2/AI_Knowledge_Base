@@ -17,4 +17,10 @@ def load_txt(file_path: str) ->str:
 
     # 3.读取文件正文并返回
     text = p.read_text(encoding="utf-8")
-    return clean_text(text)
+
+    text = clean_text(text)
+
+    if not text.strip():
+        raise ValueError("文件内容为空")
+
+    return text

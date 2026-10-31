@@ -38,8 +38,12 @@ except ValueError as e:
 fake_path3 = Path(__file__).parent / "sample3.txt"
 fake_path3.write_text("", encoding="utf-8")
 
-text3 = load_txt(str(fake_path3))
-print(text3, [text3],type(text3))
+try:
+    text3 = load_txt(str(fake_path3))
+except ValueError as e:
+    print("空文件校验成功：", e)
+
+
 
 test_file.unlink()
 fake_path2.unlink()
