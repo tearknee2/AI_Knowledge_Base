@@ -374,21 +374,15 @@ uvicorn app.main:app --reload
 
 ### 9.1 自动化测试
 
-项目使用 pytest 进行自动化测试。
+项目使用 pytest 进行自动化测试，测试代码位于 `tests/` 目录，运行环境为 conda 环境 `ai-agent`（Python 3.11）。测试覆盖五个层次：纯函数（文本切分/加载）、Schema 字段校验、服务层与 RAG 问答链路（mock 隔离向量库与大模型）、ORM 模型与关系（SQLite 内存库）、API 全链路（TestClient + 依赖覆盖，真实服务层与仓储跑在内存库上）。
 
 当前完整测试结果：
 
 ```text
-39 passed in 13.18s
+100 passed in 14.35s
 ```
 
-RAG 服务专项测试：
-
-```text
-4 passed in 11.74s
-```
-
-专项测试覆盖：
+其中 RAG 问答链路测试覆盖：
 
 - 仅使用处理完成的文档。
 - 不存在已完成文档时不调用大模型。
@@ -398,7 +392,7 @@ RAG 服务专项测试：
 运行测试：
 
 ```bash
-python -m pytest -q
+pytest tests -q
 ```
 
 ### 9.2 检索实验
