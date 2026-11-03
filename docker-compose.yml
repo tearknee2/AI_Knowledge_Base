@@ -1,0 +1,80 @@
+# 一条命令起全栈：docker compose up -d --build
+# 前置：同层目录放好 .env（数据库密码、DEEPSEEK_API_KEY 等），
+#       前端源码位于 ../kb-web（与本项目并排放置）
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      # 密码/库名直接复用 .env 里的值（compose 会自动读取同目录 .env 做插值）
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=128M   # 2G 内存学生机的保守配置
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # 预留缓存层：当前应用代码尚未使用 Redis（requirements 里只装了客户端库），
+  # 保留服务占位以匹配架构规划；不需要可直接删除此段
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      args:
+        APT_MIRROR: ${APT_MIRROR:-https://deb.debian.org}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+        TORCH_WHEELS_URL: ${TORCH_WHEELS_URL:-https://download.pytorch.org/whl/cpu/}
+    env_file: .env
+    environment:
+      # 以下值覆盖 .env（compose 的 environment 优先级高于 env_file）
+      MYSQL_HOST: mysql            # 容器网络里连服务名，不再连 127.0.0.1
+      CHROMA_PATH: /data/chroma
+      BGE_MODEL_PATH: ${CONTAINER_BGE_MODEL_PATH:-BAAI/bge-small-zh-v1.5}   # 容器内默认按模型 ID 下载；本机可挂载已有缓存
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}                    # 国内可达的 HuggingFace 镜像
+      HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-0}                                  # 已挂载模型缓存时可设为 1，完全不联网
+      TZ: Asia/Shanghai
+    volumes:
+      - uploads:/app/uploads      # 上传的文档文件
+      - chroma_data:/data/chroma  # Chroma 向量库持久化
+      - ${HF_CACHE_DIR:-hf_cache}:/root/.cache/huggingface  # 嵌入模型缓存，重启不重下
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s   # 冷启动要 import torch，2G 机器上可能 20-40s
+
+  web:
+    build:
+      context: ../kb-web
+      dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    ports:
+      - "80:80"                   # 本机 80 被占用时临时改成 "8080:80"
+    depends_on:
+      - app
+
+volumes:
+  mysql_data:
+  chroma_data:
+  hf_cache:
+  uploads:

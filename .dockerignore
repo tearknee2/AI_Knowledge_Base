@@ -1,0 +1,15 @@
+# 构建上下文瘦身 + 密钥不入镜像
+.git
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+verify/
+docs/
+uploads/
+*.md
+*.bundle
+*.patch
+Dockerfile
+docker-compose.yml
