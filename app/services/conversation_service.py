@@ -17,8 +17,8 @@ class ConversationService:
         self,
         knowledge_base_id: int,
         title: str,
+        user_id: int,
         conversation_id: int | None = None,
-        user_id : int = 1,
     ):
         self.knowledge_base_service.get_knowledge_base_by_id(
             knowledge_base_id,

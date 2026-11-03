@@ -21,8 +21,16 @@ class DocumentService:
         self.knowledge_base_service = knowledge_base_service
         self.document_processing_service = document_processing_service
 
-    def upload_document(self, knowledge_base_id: int, file: UploadFile):
-        self.knowledge_base_service.get_knowledge_base_by_id(knowledge_base_id, user_id=1)
+    def upload_document(
+        self,
+        knowledge_base_id: int,
+        file: UploadFile,
+        user_id: int
+    ):
+        self.knowledge_base_service.get_knowledge_base_by_id(
+            knowledge_base_id,
+            user_id=user_id
+        )
 
         # base_dir = Path(__file__).resolve().parent.parent
         base_dir = Path(__file__).resolve().parents[2]

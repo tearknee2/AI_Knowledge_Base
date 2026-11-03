@@ -3,9 +3,7 @@ import chromadb
 from dotenv import load_dotenv
 import os
 
-load_dotenv(
-    dotenv_path=r"D:\PythonProject\ai_agent\AI_Knowledge_Base\.env"
-)
+load_dotenv()
 CHROMA_PATH = os.getenv("CHROMA_PATH")
 
 _client = None

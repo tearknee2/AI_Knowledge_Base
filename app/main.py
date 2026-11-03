@@ -1,9 +1,18 @@
 # main.py
 import logging
+import jwt
+
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi.security import (
+    OAuth2PasswordBearer,
+    OAuth2PasswordRequestForm
+)
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.security import create_access_token,decode_access_token
+
+from app.models.user import User
 
 from app.schemas.document import (
     DocumentResponse,
@@ -14,7 +23,12 @@ from app.schemas.knowledge_base import (
     KnowledgeBaseResponse,
     KnowledgeListItem
 )
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import (
+    UserCreate,
+    UserResponse,
+    UserLogin,
+    TokenResponse
+)
 from app.schemas.chat import ChatRequest, ChatResponse
 
 from app.repositories.user_repository import UserRepository
@@ -41,6 +55,44 @@ from app.services.llm_service import LLMServiceError
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        decoded_token = decode_access_token(token)
+
+        user_id = decoded_token.get("sub")
+
+        if user_id is None:
+            raise credentials_exception
+
+        user_id = int(user_id)
+
+    except (jwt.InvalidTokenError, ValueError, TypeError):
+        raise credentials_exception
+
+    user = db.query(User).filter(
+        User.id == user_id
+    ).one_or_none()
+
+    if user is None:
+        raise credentials_exception
+
+    return user
+
+@app.get("/users/me",response_model=UserResponse)
+def read_current_user(
+    current_user: User = Depends(get_current_user)
+):
+    return current_user
 
 @app.get("/")
 async def get():
@@ -59,13 +111,14 @@ async def get():
 )
 def create_knowledge_base(
     data: KnowledgeBaseCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     repository = KnowledgeBaseRepository(db)
     service = KnowledgeBaseService(repository)
 
     knowledge_base_data = data.model_dump() # 将Pydantic模型转变为字典
-    knowledge_base_data["user_id"] = 1 # 暂时使用测试用户id
+    knowledge_base_data["user_id"] = current_user.id
     try:
         return service.create_knowledge_base(knowledge_base_data)
     except BusinessException as exc:
@@ -82,13 +135,15 @@ def create_knowledge_base(
     status_code=200
 )
 def list_knowledge_bases(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     repository = KnowledgeBaseRepository(db)
-
     service = KnowledgeBaseService(repository)
 
-    return service.get_knowledge_bases_by_user(user_id=1)
+    return service.get_knowledge_bases_by_user(
+        user_id=current_user.id
+    )
 
 @app.get(
     "/knowledge-bases/{knowledge_base_id}",
@@ -102,14 +157,17 @@ def list_knowledge_bases(
 )
 def get_knowledge_base_by_id(
     knowledge_base_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     repository = KnowledgeBaseRepository(db)
-
     service = KnowledgeBaseService(repository)
 
     try:
-        result = service.get_knowledge_base_by_id(knowledge_base_id, user_id=1)
+        result = service.get_knowledge_base_by_id(
+            knowledge_base_id,
+            user_id=current_user.id
+        )
     except BusinessException as exc:
         raise HTTPException(
             status_code=404,
@@ -145,6 +203,44 @@ def create_user(
         ) from exc
     return result
 
+@app.post(
+    "/login",
+    response_model=TokenResponse,
+    status_code=200,
+    responses={
+        401:{
+            "description":"用户名或密码错误"
+        }
+    }
+)
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    # 1. 创建 Repository 和 Service
+    repository = UserRepository(db)
+    service = UserService(repository)
+
+    # 2.验证用户名和密码
+    try:
+        user = service.authenticate(
+            username=form_data.username,
+            password=form_data.password
+        )
+    except UserBusinessException as exc:
+        raise HTTPException(
+            status_code=401,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"}
+        ) from exc
+
+    # 3.创建 JWT Token
+    access_token = create_access_token(
+        data={"sub": str(user.id)}
+    )
+
+    # 4.返回 Token
+    return TokenResponse(access_token=access_token)
 
 @app.post(
     "/knowledge-bases/{knowledge_base_id}/documents",
@@ -154,7 +250,8 @@ def create_user(
 def upload_document(
         knowledge_base_id: int,
         db: Session = Depends(get_db),
-        file : UploadFile = File(...)
+        file : UploadFile = File(...),
+        current_user: User = Depends(get_current_user)
 ):
     knowledge_base_repository = KnowledgeBaseRepository(db)
     knowledge_base_service = KnowledgeBaseService(knowledge_base_repository)
@@ -166,7 +263,11 @@ def upload_document(
         document_processing_service
     )
     try:
-        result = document_service.upload_document(knowledge_base_id, file)
+        result = document_service.upload_document(
+            knowledge_base_id,
+            file,
+            user_id=current_user.id
+        )
         return result
     except BusinessException as exc:
         raise HTTPException(
@@ -186,7 +287,8 @@ def upload_document(
 )
 def list_documents(
     knowledge_base_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     knowledge_base_repository = KnowledgeBaseRepository(db)
     knowledge_base_service = KnowledgeBaseService(knowledge_base_repository)
@@ -202,7 +304,7 @@ def list_documents(
     try:
         result = document_service.list_documents(
             knowledge_base_id,
-            user_id=1,
+            user_id=current_user.id,
         )
         return result
     except BusinessException as exc:
@@ -225,7 +327,8 @@ def list_documents(
 async def chat_with_knowledge_base(
     knowledge_base_id: int,
     request: ChatRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     # 1.检查知识库是否存在，以及当前临时用户是否有权访问
     repository = KnowledgeBaseRepository(db)
@@ -245,7 +348,7 @@ async def chat_with_knowledge_base(
             knowledge_base_id=knowledge_base_id,
             title=request.question,
             conversation_id=request.conversation_id,
-            user_id=1
+            user_id=current_user.id
         )
     except BusinessException as exc:
         raise HTTPException(
@@ -295,15 +398,3 @@ async def chat_with_knowledge_base(
         answer=result["answer"],
         sources=result["sources"]
     )
-
-
-
-
-
-
-
-
-
-
-
-

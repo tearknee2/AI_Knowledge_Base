@@ -24,3 +24,25 @@ class UserService:
         # 组织注册业务
         result = self.repository.create(data)
         return result
+
+    def authenticate(self, username: str, password: str):
+        """验证用户身份"""
+
+        # 1.根据用户名查询用户
+        user = self.repository.get_by_username(username)
+
+        # 2.用户不存在：登录失败
+        if not user:
+            raise BusinessException("用户名或密码错误")
+
+        # 3.验证原始密码与数据库哈希是否匹配
+        is_valid = self.password_hash.verify(
+            password,
+            user.password_hash
+        )
+
+        if not is_valid:
+            raise BusinessException("用户名或密码错误")
+
+        # 4.返回用户对象
+        return user
