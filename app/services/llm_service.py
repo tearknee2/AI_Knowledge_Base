@@ -5,12 +5,15 @@ from app.core.config import (
     DEEPSEEK_BASE_URL,
     DEEPSEEK_MODEL
 )
+from app.core.exceptions import LLMUnavailableError
 
 
-class LLMServiceError(RuntimeError):
+class LLMServiceError(LLMUnavailableError):
     """大模型服务调用或响应异常"""
-    pass
-
+    def __init__(self, message:str):
+        super().__init__()
+        self.internal_message = message
+        
 async def chat_with_llm(messages: list[dict]) -> dict:
     """调用Deepseek，返回assistant消息"""
 
@@ -56,7 +59,6 @@ async def chat_with_llm(messages: list[dict]) -> dict:
                 or not isinstance(message.get('content'), str)
                 or not message.get('content').strip()
         ):
-
             raise LLMServiceError("返回的文本为空或者格式不正确")
     except json.JSONDecodeError as exc:
         raise LLMServiceError("响应体不是合法JSON") from exc

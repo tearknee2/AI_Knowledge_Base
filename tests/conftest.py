@@ -59,7 +59,7 @@ def api_client(db_session):
 
 @pytest.fixture()
 def seed_user(db_session):
-    """路由中临时写死 user_id=1，这里直接在库里准备这个用户。"""
+    """为需要认证的API测试准备用户；测试请求需通过登录或覆盖，get_current_user注入身份"""
     user = User(id=1, username="tester", password_hash="test-hash")
     db_session.add(user)
     db_session.commit()

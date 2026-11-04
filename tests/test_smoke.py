@@ -2,7 +2,7 @@
 # 对应任务书：docs/tutorial/14-实施路线图.md T1
 from app.main import app
 
-# 截至 T1，main.py 应有的全部业务路由（不含 FastAPI 自带的 /docs 等）
+# # T1 阶段的路由清单；JWT 改造后新增的 /login、/users/me 未包含在本用例中
 EXPECTED_ROUTES = {
     "/": {"GET"},
     "/users": {"POST"},

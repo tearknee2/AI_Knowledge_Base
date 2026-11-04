@@ -1,8 +1,7 @@
 from pwdlib import PasswordHash
 from app.repositories.user_repository import UserRepository
+from app.core.exceptions import ConflictError, AuthenticationError
 
-class BusinessException(Exception):
-    pass
 
 class UserService:
     def __init__(self, repository: UserRepository):
@@ -14,7 +13,7 @@ class UserService:
         # 判断用户名是否存在
         existing = self.repository.get_by_username(user_data['username'])
         if existing:
-            raise BusinessException("该用户已存在")
+            raise ConflictError()
 
         # 处理密码哈希
         data = user_data.copy() # 浅拷贝
@@ -33,7 +32,7 @@ class UserService:
 
         # 2.用户不存在：登录失败
         if not user:
-            raise BusinessException("用户名或密码错误")
+            raise AuthenticationError()
 
         # 3.验证原始密码与数据库哈希是否匹配
         is_valid = self.password_hash.verify(
@@ -42,7 +41,7 @@ class UserService:
         )
 
         if not is_valid:
-            raise BusinessException("用户名或密码错误")
+            raise AuthenticationError()
 
         # 4.返回用户对象
         return user

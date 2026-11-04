@@ -59,7 +59,7 @@ def test_create_knowledge_base_success(api_client, seed_user):
     body = resp.json()
     assert body["name"] == "技术文档"
     assert body["status"] == "ACTIVE"  # 服务层默认置为 ACTIVE
-    assert body["user_id"] == 1  # 当前临时写死的测试用户
+    assert body["user_id"] == seed_user.id  # 断言知识库归属于当前测试用户（seed_user)
 
 
 def test_create_knowledge_base_duplicate_name_conflict(api_client, seed_user):

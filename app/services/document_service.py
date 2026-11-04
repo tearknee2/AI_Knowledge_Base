@@ -32,7 +32,6 @@ class DocumentService:
             user_id=user_id
         )
 
-        # base_dir = Path(__file__).resolve().parent.parent
         base_dir = Path(__file__).resolve().parents[2]
         upload_dir = base_dir / "uploads" / str(knowledge_base_id)
         Path(upload_dir).mkdir(parents=True,exist_ok=True)

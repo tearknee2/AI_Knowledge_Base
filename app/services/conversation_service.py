@@ -1,7 +1,6 @@
-from pydantic import Field
-
 from app.repositories.conversation_repository import ConversationRepository
-from app.services.knowledge_base_service import BusinessException, KnowledgeBaseService
+from app.services.knowledge_base_service import KnowledgeBaseService
+from app.core.exceptions import ResourceNotFoundError
 
 class ConversationService:
     def __init__(
@@ -38,8 +37,6 @@ class ConversationService:
                 or conversation.user_id != user_id
                 or conversation.knowledge_base_id != knowledge_base_id
             ):
-                raise BusinessException(
-                    "Conversation not found or access denied"
-                )
+                raise ResourceNotFoundError()
 
         return conversation
