@@ -50,3 +50,19 @@ class StorageError(AppException):
             code="STORAGE_ERROR",
             status_code=500
         )
+
+class UnsupportedFileTypeError(AppException):
+    def __init__(self):
+        super().__init__(
+            message="不支持的文件类型",
+            code="UNSUPPORTED_TYPE",
+            status_code=415
+        )
+
+class FileTooLargeError(AppException):
+    def __init__(self):
+        super().__init__(
+            message="文件大小超过限制",
+            code="FILE_TOO_LARGE",
+            status_code=413
+        )
