@@ -9,6 +9,7 @@ async def answer_question(
     question: str,
     knowledge_base_id: int,
     document_repository: DocumentRepository,
+    history_messages: list[dict],
     n_results: int = 4,
 ) -> dict:
     """完成一次完整的RAG问答"""
@@ -86,7 +87,8 @@ async def answer_question(
     # 6.调用大模型生成答案
     answer = await generate_answer(
         query=question,
-        context=context
+        context=context,
+        history_messages=history_messages,
     )
 
     # 7.整理每个命中文本块的来源信息

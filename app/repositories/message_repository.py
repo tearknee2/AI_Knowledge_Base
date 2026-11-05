@@ -3,7 +3,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.models import Message
-from enum import Enum
 
 
 class MessageRepository:

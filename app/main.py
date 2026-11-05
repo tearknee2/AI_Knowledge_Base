@@ -391,6 +391,17 @@ async def chat_with_knowledge_base(
         user_id=current_user.id
     )
 
+    db_messages = message_repository.get_by_conversation_id(
+        conversation_id=conversation.id, )
+
+    history_messages = [
+        {
+            "role": message.role,
+            "content": message.content,
+        }
+        for message in db_messages
+    ]
+
     message_repository.create(
         conversation_id=conversation.id,
         role="user",
@@ -405,6 +416,7 @@ async def chat_with_knowledge_base(
             question=request.question,
             knowledge_base_id=knowledge_base_id,
             document_repository=document_repository,
+            history_messages=history_messages,
             n_results=n_results,
         )
     except LLMServiceError:

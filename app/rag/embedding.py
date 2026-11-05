@@ -24,11 +24,15 @@ def get_model():
         _model = SentenceTransformer(model_path)
     return _model
 
-def embed_texts(texts: list[str]) -> list[list[float]]:
+def embed_texts(
+    texts: list[str],
+    batch_size: int = 32
+) -> list[list[float]]:
     """
+    :param batch_size:
     :param texts:接收文本列表
     :return: 返回对应的向量列表
     """
     model = get_model()
-    vectors = model.encode(texts)
+    vectors = model.encode(texts, batch_size=batch_size)
     return vectors.tolist()

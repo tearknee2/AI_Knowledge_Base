@@ -2,7 +2,7 @@
 
 from app.repositories.document_repository import DocumentRepository
 from app.rag.txt_loader import load_txt
-from app.rag.chunk_size_overlap import split_text
+from app.rag.chunk_size_overlap import build_chunks
 from app.rag.embedding import embed_texts
 from app.rag.vector_store import init, upsert_chunks, delete_document_chunks
 from uuid import uuid4
@@ -25,13 +25,13 @@ class DocumentProcessingService:
         # 文件读取和清洗
         load_clean_result = load_txt(document.file_path)
         # 文本分块
-        split_result = split_text(load_clean_result, 500, 50)
+        split_result = build_chunks(load_clean_result)
         # 返回文本块
         return split_result
 
-    def vectorize_document(self, chunks):
+    def vectorize_document(self, texts):
         """得到文本块并生成向量"""
-        vectors = embed_texts(chunks)
+        vectors = embed_texts(texts)
         return vectors
 
     def store_document_vectors(self, document_id: int):
@@ -55,31 +55,56 @@ class DocumentProcessingService:
                 document_id,
                 "EMBEDDING"
             )
-            embeddings = self.vectorize_document(chunks)
-
             # 3.为本次处理生成唯一版本号
             version = uuid4().hex
 
-            # 4.生成带版本号的文本块id
-            ids = [
-                f"doc_{document_id}_{version}_chunk_{i}"
-                for i in range(len(chunks))
-            ]
+            for i in range(0, len(chunks), 1000):
+                # 1.获取当前批次
+                batch_chunks = chunks[i:i+1000]
 
-            # 4.为每个文本块准备来源元数据
-            metadatas = [
-                {
+                # 2.提取当前批次文本
+                batch_texts = [chunk["text"] for chunk in batch_chunks]
+
+                # 3.生成当前批次向量
+                batch_embeddings = self.vectorize_document(batch_texts)
+
+                # 4.生成当前批次IDS（列表推导式）
+                batch_ids = [
+                    f"doc_{document_id}_{version}_chunk_{j}"
+                    for j in range(i, i+len(batch_chunks))
+                ]
+
+                # 5.生成当前批次Metadatas（列表推导式）
+                batch_metadatas = [
+                    {
                     "knowledge_base_id": document.knowledge_base_id,
                     "document_id": document.id,
-                    "chunk_index": i,
+                    "chunk_index": j,
                     "file_name": document.file_name,
-                    "version": version
+                    "version": version,
+                    "section_path": " > ".join(chunks[j]["section_path"]),
                 }
-                for i in range(len(chunks))
-            ]
+                for j in range(i, i+len(batch_chunks))
+                ]
 
-            # 5.先写入新版本向量
-            upsert_chunks(ids, chunks, metadatas, embeddings)
+                if not (
+                        len(batch_ids)
+                        == len(batch_texts)
+                        == len(batch_metadatas)
+                        == len(batch_embeddings)
+                ):
+                    raise RuntimeError("当前批次数据数量不一致")
+                print(
+                    f"当前批次起点: {i}, "
+                    f"当前批次数量: {len(batch_chunks)}, "
+                    f"IDs: {len(batch_ids)}, "
+                    f"Texts: {len(batch_texts)}, "
+                    f"Metadatas: {len(batch_metadatas)}, "
+                    f"Embeddings: {len(batch_embeddings)}"
+                )
+                # 6.写入当前批次ChromaDB
+                upsert_chunks(batch_ids, batch_texts, batch_metadatas, batch_embeddings)
+
 
             # 6.查询刚写入的新版本，验证数量
             client, collection = init()
