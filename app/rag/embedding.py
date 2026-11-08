@@ -1,4 +1,5 @@
 # embedding
+import torch
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 from pathlib import Path
@@ -20,13 +21,14 @@ def get_model():
     if _model is None:
         if not model_path:
             raise ValueError("请在.env中配置 BGE_MODEL_PATH")
-
-        _model = SentenceTransformer(model_path)
+        # 1. 自动检测设备：优先使用 GPU (cuda)，如果没有则使用 CPU
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        _model = SentenceTransformer(model_path,device=device)
     return _model
 
 def embed_texts(
     texts: list[str],
-    batch_size: int = 32
+    batch_size: int = 256
 ) -> list[list[float]]:
     """
     :param batch_size:
