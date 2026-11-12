@@ -408,7 +408,7 @@ async def chat_with_knowledge_base(
         content=request.question
     )
 
-    n_results = 4
+    n_results = 6
 
     # 2.执行完整的RAG回答
     try:

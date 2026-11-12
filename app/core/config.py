@@ -50,3 +50,9 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(
         "30"
     )
 )
+
+ENABLE_RERANK = os.getenv("ENABLE_RERANK", "false").lower() == "true"
+
+BGE_RERANKER_PATH = os.getenv(
+    "BGE_RERANKER_PATH",
+)

@@ -2,14 +2,21 @@
 
 from app.repositories.document_repository import DocumentRepository
 from app.rag.txt_loader import load_txt
-from app.rag.chunk_size_overlap import build_chunks
-from app.rag.embedding import embed_texts
+from app.rag.chunk_size_overlap import (
+    build_chunk_embedding_text,
+    group_structured_documents,
+    merge_paragraph_blocks,
+    parse_structured_document,
+    split_structured_group,
+)
+from app.rag.embedding import embed_texts, get_model
 from app.rag.vector_store import init, upsert_chunks, delete_document_chunks
 from uuid import uuid4
 
 class DocumentProcessingService:
-    def __init__(self, repository: DocumentRepository):
+    def __init__(self, repository: DocumentRepository, tokenizer=None):
         self.repository = repository
+        self.tokenizer = tokenizer
 
     def query_document(self, document_id: int):
         # 负责查询文档
@@ -24,10 +31,17 @@ class DocumentProcessingService:
         # 负责加载和切分
         # 文件读取和清洗
         load_clean_result = load_txt(document.file_path)
-        # 文本分块
-        split_result = build_chunks(load_clean_result)
-        # 返回文本块
-        return split_result
+        # 结构化解析、段落合并与分组
+        blocks = merge_paragraph_blocks(
+            parse_structured_document(load_clean_result)
+        )
+        groups = group_structured_documents(blocks)
+        # 按文档结构和 Token 上限切分
+        tokenizer = self.tokenizer or get_model().tokenizer
+        chunks = []
+        for group in groups:
+            chunks.extend(split_structured_group(group, tokenizer))
+        return chunks
 
     def vectorize_document(self, texts):
         """得到文本块并生成向量"""
@@ -62,11 +76,17 @@ class DocumentProcessingService:
                 # 1.获取当前批次
                 batch_chunks = chunks[i:i+1000]
 
-                # 2.提取当前批次文本
+                # 2.提取当前批次原始正文和 Embedding 文本
                 batch_texts = [chunk["text"] for chunk in batch_chunks]
+                batch_embedding_texts = [
+                    build_chunk_embedding_text(chunk)
+                    for chunk in batch_chunks
+                ]
 
-                # 3.生成当前批次向量
-                batch_embeddings = self.vectorize_document(batch_texts)
+                # 3.使用带结构路径的 embedding_text 生成向量
+                batch_embeddings = self.vectorize_document(
+                    batch_embedding_texts
+                )
 
                 # 4.生成当前批次IDS（列表推导式）
                 batch_ids = [

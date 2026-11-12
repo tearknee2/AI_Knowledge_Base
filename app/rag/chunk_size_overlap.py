@@ -1,6 +1,8 @@
 # chunk_size_overlap
 import re
 
+from app.rag.embedding import get_model
+
 
 def split_text(text, chunk_size:int, chunk_overlap:int):
     if not isinstance(text,str):
@@ -278,58 +280,351 @@ def group_structured_documents(blocks):
     )
     return groups
 
-file = r"C:\Users\tear_knee\Desktop\01_员工管理制度.txt"
-
-with open(file, encoding="utf-8") as f:
-
-    text = f.read()
-
-    parsed_blocks = parse_structured_document(text)
-
-    merged_blocks = merge_paragraph_blocks(parsed_blocks)
-
-    groups = group_structured_documents(merged_blocks)
-
-    print("原始文本长度：", len(text))
-    print("Parser 输出数量：", len(parsed_blocks))
-    print("Merge 输出数量：", len(merged_blocks))
-    print("Grouping 输出数量：", len(groups))
-
-    for index, group in enumerate(groups):
-        print(f"\n第 {index + 1} 组")
-        print("章节路径：", group["section_path"])
-        print("条款标题：", group["clause_title"])
-        print("正文块数量：", len(group["blocks"]))
-
-    for index, group in enumerate(groups):
-        print(f"\n========== 第 {index + 1} 组正文 ==========")
-
-        for block in group["blocks"]:
-            print(block["text"], end="")
-
-    # 检查正文块是否完整归组
-    paragraph_blocks = [
-        block for block in merged_blocks
-        if block["type"] == "paragraph"
-    ]
-
-    grouped_blocks = [
-        block
-        for group in groups
-        for block in group["blocks"]
-    ]
-
-    print("Merge 后正文块数量：", len(paragraph_blocks))
-    print("Grouping 后正文块数量：", len(grouped_blocks))
-
-    assert len(paragraph_blocks) == len(grouped_blocks)
-    assert paragraph_blocks == grouped_blocks
-
-    print("正文完整性检查通过！")
 
 
+def count_tokens(text, tokenizer):
+    """对文本编码并统计总长度(含特殊token)"""
+    token_ids = tokenizer.encode(text, add_special_tokens=True)
+    return len(token_ids)
+
+def build_embedding_text(group, text):
+    """在不丢失正文、不跨越当前 Group 边界的前提下，把正文切成符合 Token 长度限制的 Chunk"""
+    section_path = " > ".join(group["section_path"])
+
+    if group["clause_title"] is not None:
+        section_path += " > " + group["clause_title"]
+
+    embedding_text = section_path + "\n" + text
+
+    return embedding_text
+
+def build_chunk_embedding_text(chunk):
+    """使用 Chunk 自带的结构信息生成 embedding_text"""
+    return build_embedding_text(chunk, chunk["text"])
 
 
+def create_chunk(group, paragraph):
+    return {
+        "section_path": group["section_path"].copy(),
+        "clause_title": group["clause_title"],
+        "text": paragraph["text"],
+        "source_start": paragraph["source_start"],
+        "source_end": paragraph["source_end"],
+    }
 
 
+_SENTENCE_SEPARATORS = ("\n\n", "\n", "。", "！", "？", "；")
+_CLAUSE_SEPARATORS = ("，", "、", "：")
+
+
+def _separator_cuts(text, separators):
+    """返回分隔符之后的字符位置，按位置升序排列（越靠前重叠越长）"""
+    cuts = set()
+    for separator in separators:
+        start = 0
+        while True:
+            position = text.find(separator, start)
+            if position == -1:
+                break
+            end = position + len(separator)
+            if end < len(text):
+                cuts.add(end)
+            start = end
+    return sorted(cuts)
+
+
+def _select_separator_overlap(
+    previous_text,
+    current_text,
+    tokenizer,
+    prefix,
+    overlap_tokens,
+    max_tokens,
+    separators,
+):
+    for cut in _separator_cuts(previous_text, separators):
+        overlap = previous_text[cut:]
+        if not overlap.strip():
+            continue
+        if len(tokenizer.encode(overlap, add_special_tokens=False)) > overlap_tokens:
+            continue
+        if count_tokens(prefix + overlap + current_text, tokenizer) <= max_tokens:
+            return overlap
+    return ""
+
+
+def _select_token_overlap(
+    previous_text,
+    current_text,
+    tokenizer,
+    prefix,
+    overlap_tokens,
+    max_tokens,
+):
+    """没有语义分隔符可用时，退回到 Token 边界，避免按固定字符数截断"""
+    offsets = tokenizer(
+        previous_text,
+        add_special_tokens=False,
+        return_offsets_mapping=True,
+    )["offset_mapping"]
+
+    for window in range(min(overlap_tokens, len(offsets)), 0, -1):
+        start = offsets[-window][0]
+        if start <= 0:
+            continue
+        overlap = previous_text[start:]
+        if not overlap.strip():
+            continue
+        if count_tokens(prefix + overlap + current_text, tokenizer) <= max_tokens:
+            return overlap
+    return ""
+
+
+def _merge_whitespace_parts(parts):
+    """把纯空白片段并入相邻正文，避免生成只含换行的 Chunk"""
+    merged = []
+    pending = ""
+
+    for part in parts:
+        if part.strip():
+            merged.append(pending + part)
+            pending = ""
+        elif merged:
+            merged[-1] += part
+        else:
+            pending += part
+
+    if pending:
+        merged.append(pending)
+
+    return merged
+
+
+def _select_overlap(
+    previous_text,
+    current_text,
+    tokenizer,
+    prefix,
+    overlap_tokens,
+    max_tokens,
+):
+    if overlap_tokens <= 0 or not previous_text:
+        return ""
+
+    for separators in (_SENTENCE_SEPARATORS, _CLAUSE_SEPARATORS):
+        overlap = _select_separator_overlap(
+            previous_text,
+            current_text,
+            tokenizer,
+            prefix,
+            overlap_tokens,
+            max_tokens,
+            separators,
+        )
+        if overlap:
+            return overlap
+
+    # 上一块本身就是一句完整正文时，优先整句重叠，避免从句子中间开始
+    previous_token_count = len(
+        tokenizer.encode(previous_text, add_special_tokens=False)
+    )
+    if (
+        previous_token_count <= overlap_tokens
+        and count_tokens(prefix + previous_text + current_text, tokenizer)
+        <= max_tokens
+    ):
+        return previous_text
+
+    return _select_token_overlap(
+        previous_text,
+        current_text,
+        tokenizer,
+        prefix,
+        overlap_tokens,
+        max_tokens,
+    )
+
+
+def split_structured_group(
+    group,
+    tokenizer,
+    target_tokens=350,
+    max_tokens=480,
+    overlap_tokens=64,
+):
+    chunks = []
+
+    if type(overlap_tokens) is not int:
+        raise TypeError("Overlap tokens must be of type int")
+    if overlap_tokens < 0:
+        raise ValueError("Overlap tokens must not be negative")
+    if overlap_tokens >= max_tokens:
+        raise ValueError("Overlap tokens must be smaller than max_tokens")
+
+    for block in group["blocks"]:
+        embedding_text = build_embedding_text(group, block["text"])
+        count_token = count_tokens(embedding_text, tokenizer)
+
+        if count_token <= max_tokens:
+            chunks.append(create_chunk(group, block))
+            continue
+
+        cursor = 0
+        previous_text = None
+        prefix = build_embedding_text(group, "")
+        split_budget = max_tokens - overlap_tokens
+        parts = _merge_whitespace_parts(
+            split_text_recursively(
+                block["text"],
+                tokenizer,
+                split_budget,
+                prefix=prefix,
+            )
+        )
+
+        for part in parts:
+            overlap = ""
+            if previous_text is not None:
+                overlap = _select_overlap(
+                    previous_text,
+                    part,
+                    tokenizer,
+                    prefix,
+                    overlap_tokens,
+                    max_tokens,
+                )
+
+            source_start = block["source_start"] + cursor - len(overlap)
+            source_end = block["source_start"] + cursor + len(part)
+            paragraph = {
+                "text": overlap + part,
+                "source_start": source_start,
+                "source_end": source_end,
+            }
+            chunks.append(create_chunk(group, paragraph))
+            cursor += len(part)
+            previous_text = part
+        assert cursor == len(block["text"])
+
+    return chunks
+
+def split_by_separator(text, separator):
+    """按照指定分隔符切分文本，同时保留分隔符"""
+    parts = []
+    while text:
+        position = text.find(separator)
+        if position == -1:
+            parts.append(text)
+            break
+        end_position = position + len(separator)
+        part1 = text[:end_position]
+        part2 = text[end_position:]
+        parts.append(part1)
+        text = part2
+
+    return parts
+
+def hard_split(text, tokenizer, max_tokens, prefix=""):
+    special_token_count = tokenizer.num_special_tokens_to_add(pair=False)
+    available_tokens = max_tokens - special_token_count
+
+    if available_tokens <= 0:
+        raise ValueError("max_tokens is too small")
+
+    parts = []
+    remaining = text
+
+    while remaining:
+        result = tokenizer(
+            prefix + remaining,
+            add_special_tokens=False,
+            return_offsets_mapping=True
+        )
+        input_ids = result["input_ids"]
+        offset_mapping = result["offset_mapping"]
+        token_count = len(input_ids)
+
+        if token_count <= available_tokens:
+            parts.append(remaining)
+            break
+
+        body_cut_position = None
+
+        for start, end in offset_mapping[:available_tokens]:
+            if start >= len(prefix) and end > start:
+                body_cut_position = end - len(prefix)
+
+        if body_cut_position is None or body_cut_position <= 0:
+            raise ValueError("无法在当前 Token 预算内找到合法的正文切分位置")
+
+        parts.append(remaining[:body_cut_position])
+        remaining = remaining[body_cut_position:]
+
+    return parts
+
+def split_text_recursively(
+    text,
+    tokenizer,
+    max_tokens,
+    prefix="",
+    separators=None,
+):
+    """
+    :param text:当前需要处理的正文
+    :param tokenizer: BGE分词器
+    :param max_tokens: 完整embedding_text上限
+    :param prefix: 结构路径
+    :param separators: 递归切分的分隔符优先级
+    :return: list[str]只返回正文，不含prefix，包含原始分隔符和空白字符
+    """
+    # 1.判断完整embedding_text是否超限
+    input_ids = tokenizer(
+        prefix + text,
+        add_special_tokens=False,
+        return_offsets_mapping=True
+    )["input_ids"]
+    token_count = len(input_ids)
+
+    special_tokens_count = tokenizer.num_special_tokens_to_add(pair=False)
+    available_tokens = max_tokens - special_tokens_count
+    if available_tokens <= 0:
+        raise ValueError("max_tokens is too small")
+    # 2.如果没有超限，直接返回[text]
+    if token_count <= available_tokens:
+        return [text]
+    # 3.如果超限，进入分隔符切分逻辑
+    if separators is None:
+        separators = ["\n\n", "\n", "。", "！", "？", "；"]
+
+    chunks = []
+
+    for index, separator in enumerate(separators):
+        parts = split_by_separator(text, separator)
+
+        if len(parts) <= 1:
+            continue
+
+        for part in parts:
+            part_ids = tokenizer(
+                prefix + part,
+                add_special_tokens=False,
+                return_offsets_mapping=True
+            )["input_ids"]
+
+            part_count = len(part_ids)
+
+            if part_count <= available_tokens:
+                chunks.append(part)
+            else:
+                results = split_text_recursively(
+                    part,
+                    tokenizer,
+                    max_tokens,
+                    prefix=prefix,
+                    separators=separators[index+1:],
+                )
+                for result in results:
+                    chunks.append(result)
+        return chunks
+    return hard_split(text, tokenizer, max_tokens, prefix=prefix)
 

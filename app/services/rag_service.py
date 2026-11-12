@@ -1,5 +1,7 @@
 # rag.service
+from app.core.config import ENABLE_RERANK
 from app.rag.embedding import embed_texts
+from app.rag.reranker import rerank_chunks
 from app.rag.vector_store import search_chunks
 from app.rag.generation import build_context,generate_answer
 from app.repositories.document_repository import DocumentRepository
@@ -60,7 +62,10 @@ async def answer_question(
             }
         )
 
-    filtered_results = filtered_results[:n_results]
+    if ENABLE_RERANK:
+        filtered_results = rerank_chunks(question, filtered_results, n_results)
+    else:
+        filtered_results = filtered_results[:n_results]
 
     # 从筛选结果中取出后续需要的数据
     documents = [
